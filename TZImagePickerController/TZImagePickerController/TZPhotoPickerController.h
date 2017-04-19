@@ -14,8 +14,9 @@
 @property (nonatomic, assign) BOOL isFirstAppear;
 @property (nonatomic, assign) NSInteger columnNumber;
 @property (nonatomic, strong) TZAlbumModel *model;
-
+@property (nonatomic, assign) BOOL  isRecentPhoto;
 @property (nonatomic, copy) void (^backButtonClickHandle)(TZAlbumModel *model);
+@property (nonatomic, assign) NSInteger  indexPathRow;
 
 @end
 

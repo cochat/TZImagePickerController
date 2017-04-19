@@ -11,7 +11,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <Photos/Photos.h>
 
-@class TZAlbumModel,TZAssetModel;
+@class TZAlbumModel,TZAssetModel,RHPhotoModel;
 @interface TZImageManager : NSObject
 
 @property (nonatomic, strong) PHCachingImageManager *cachingImageManager;
@@ -36,6 +36,7 @@
 @property (nonatomic, assign) NSInteger minPhotoWidthSelectable;
 @property (nonatomic, assign) NSInteger minPhotoHeightSelectable;
 @property (nonatomic, assign) BOOL hideWhenCanNotSelect;
+@property (nonatomic, assign) BOOL photoOrigion; //是否是原图
 
 /// Return YES if Authorized 返回YES如果得到了授权
 - (BOOL)authorizationStatusAuthorized;
@@ -87,6 +88,9 @@
 
 /// 修正图片转向
 - (UIImage *)fixOrientation:(UIImage *)aImage;
+
+
+- (void)getSelectedPhotoWithAsset:(id)asset completion:(void(^)(RHPhotoModel * photoModel,UIImage * photo ,NSDictionary * info, BOOL isDegraded)) completion;
 
 @end
 

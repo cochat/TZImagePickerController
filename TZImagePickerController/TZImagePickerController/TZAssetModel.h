@@ -24,6 +24,14 @@ typedef enum : NSUInteger {
 @property (nonatomic, assign) BOOL isSelected;      ///< The select status of a photo, default is No
 @property (nonatomic, assign) TZAssetModelMediaType type;
 @property (nonatomic, copy) NSString *timeLength;
+@property (nonatomic, retain) UIImage *image;             //用来显示的图片
+@property (nonatomic, assign) BOOL isEdit;             //是否被编辑
+
+@property (nonatomic, copy) NSString *currentNumber;//
+@property (nonatomic, copy) NSString *indexPathRowCurrent;//
+
+@property (nonatomic, copy) NSString *recodcurrentNumber;//记录
+
 
 /// Init a photo dataModel With a asset
 /// 用一个PHAsset/ALAsset实例，初始化一个照片模型

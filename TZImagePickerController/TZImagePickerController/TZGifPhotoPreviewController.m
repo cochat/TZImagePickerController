@@ -18,7 +18,7 @@
     UIButton *_doneButton;
     UIProgressView *_progress;
     
-    TZPhotoPreviewView *_previewView;
+//    TZPhotoPreviewView *_previewView;
     
     UIStatusBarStyle _originStatusBarStyle;
 }
@@ -49,14 +49,14 @@
 }
 
 - (void)configPreviewView {
-    _previewView = [[TZPhotoPreviewView alloc] initWithFrame:self.view.bounds];
-    _previewView.scrollView.frame = self.view.bounds;
-    _previewView.model = self.model;
-    __weak typeof(self) weakSelf = self;
-    [_previewView setSingleTapGestureBlock:^{
-        [weakSelf signleTapAction];
-    }];
-    [self.view addSubview:_previewView];
+//    _previewView = [[TZPhotoPreviewView alloc] initWithFrame:self.view.bounds];
+//    _previewView.scrollView.frame = self.view.bounds;
+//    _previewView.model = self.model;
+//    __weak typeof(self) weakSelf = self;
+//    [_previewView setSingleTapGestureBlock:^{
+//        [weakSelf signleTapAction];
+//    }];
+//    [self.view addSubview:_previewView];
 }
 
 - (void)configBottomToolBar {
@@ -114,14 +114,14 @@
 }
 
 - (void)callDelegateMethod {
-    TZImagePickerController *imagePickerVc = (TZImagePickerController *)self.navigationController;
-    UIImage *animatedImage = _previewView.imageView.image;
-    if ([imagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingGifImage:sourceAssets:)]) {
-        [imagePickerVc.pickerDelegate imagePickerController:imagePickerVc didFinishPickingGifImage:animatedImage sourceAssets:_model.asset];
-    }
-    if (imagePickerVc.didFinishPickingGifImageHandle) {
-        imagePickerVc.didFinishPickingGifImageHandle(animatedImage,_model.asset);
-    }
+//    TZImagePickerController *imagePickerVc = (TZImagePickerController *)self.navigationController;
+////    UIImage *animatedImage = _previewView.imageView.image;
+//    if ([imagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingGifImage:sourceAssets:)]) {
+//        [imagePickerVc.pickerDelegate imagePickerController:imagePickerVc didFinishPickingGifImage:animatedImage sourceAssets:_model.asset];
+//    }
+//    if (imagePickerVc.didFinishPickingGifImageHandle) {
+//        imagePickerVc.didFinishPickingGifImageHandle(animatedImage,_model.asset);
+//    }
 }
 
 @end

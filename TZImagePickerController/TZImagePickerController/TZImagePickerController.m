@@ -27,6 +27,9 @@
     UILabel *_HUDLabel;
     
     UIStatusBarStyle _originStatusBarStyle;
+    
+    BOOL  _isRecentPhoto;//最近相册
+    id   _alAsset;
 }
 /// Default is 4, Use in photos collectionView in TZPhotoPickerController
 /// 默认4列, TZPhotoPickerController中的照片collectionView
@@ -35,26 +38,34 @@
 
 @implementation TZImagePickerController
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor whiteColor];
-    self.navigationBar.barStyle = UIBarStyleBlack;
-    self.navigationBar.translucent = YES;
-    [TZImageManager manager].shouldFixOrientation = NO;
-
+    //    self.navigationBar.barStyle = UIBarStyleBlack;
+    //    self.navigationBar.translucent = YES;
+    //    [TZImageManager manager].shouldFixOrientation = NO;
+    
     // Default appearance, you can reset these after this method
     // 默认的外观，你可以在这个方法后重置
     self.oKButtonTitleColorNormal   = [UIColor colorWithRed:(83/255.0) green:(179/255.0) blue:(17/255.0) alpha:1.0];
     self.oKButtonTitleColorDisabled = [UIColor colorWithRed:(83/255.0) green:(179/255.0) blue:(17/255.0) alpha:0.5];
-    
-    if (iOS7Later) {
-        self.navigationBar.barTintColor = [UIColor colorWithRed:(34/255.0) green:(34/255.0)  blue:(34/255.0) alpha:1.0];
-        self.navigationBar.tintColor = [UIColor whiteColor];
-        self.automaticallyAdjustsScrollViewInsets = NO;
+  
+    UIBarButtonItem *barItem;
+    if (iOS9Later) {
+        barItem = [UIBarButtonItem appearanceWhenContainedInInstancesOfClasses:@[[TZImagePickerController class]]];
+    } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        barItem = [UIBarButtonItem appearanceWhenContainedIn:[TZImagePickerController class], nil];
+#pragma clang diagnostic pop
     }
+    //    NSMutableDictionary *textAttrs = [NSMutableDictionary dictionary];
+    //    textAttrs[NSForegroundColorAttributeName] = self.barItemTextColor;
+    //    textAttrs[NSFontAttributeName] = self.barItemTextFont;
+    //    [barItem setTitleTextAttributes:textAttrs forState:UIControlStateNormal];
+    
 }
+
 
 - (void)setNaviBgColor:(UIColor *)naviBgColor {
     _naviBgColor = naviBgColor;
@@ -104,7 +115,10 @@
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     _originStatusBarStyle = [UIApplication sharedApplication].statusBarStyle;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     [UIApplication sharedApplication].statusBarStyle = iOS7Later ? UIStatusBarStyleLightContent : UIStatusBarStyleBlackOpaque;
+#pragma clang diagnostic pop
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -133,7 +147,7 @@
         
         // Allow user picking original photo and video, you also can set No after this method
         // 默认准许用户选择原图和视频, 你也可以在这个方法后置为NO
-        self.allowPickingOriginalPhoto = YES;
+        self.allowPickingOriginalPhoto = self.allowPickingOriginalPhoto;
         self.allowPickingVideo = YES;
         self.allowPickingImage = YES;
         self.allowTakePicture = YES;
@@ -222,10 +236,6 @@
     self.timeout = 15;
     self.photoWidth = 828.0;
     self.photoPreviewMaxWidth = 600;
-    self.naviTitleColor = [UIColor whiteColor];
-    self.naviTitleFont = [UIFont systemFontOfSize:17];
-    self.barItemTextFont = [UIFont systemFontOfSize:15];
-    self.barItemTextColor = [UIColor whiteColor];
     self.allowPreview = YES;
     
     [self configDefaultImageName];
@@ -243,6 +253,7 @@
 }
 
 - (void)configDefaultBtnTitle {
+    self.editBtnTitleStr = [NSBundle tz_localizedStringForKey:@"Edit"];
     self.doneBtnTitleStr = [NSBundle tz_localizedStringForKey:@"Done"];
     self.cancelBtnTitleStr = [NSBundle tz_localizedStringForKey:@"Cancel"];
     self.previewBtnTitleStr = [NSBundle tz_localizedStringForKey:@"Preview"];
@@ -460,6 +471,30 @@
 - (void)pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
     if (iOS7Later) viewController.automaticallyAdjustsScrollViewInsets = NO;
     if (_timer) { [_timer invalidate]; _timer = nil;}
+    
+    if (self.childViewControllers.count > 0) {
+        UIButton *backButton = [[UIButton alloc] initWithFrame:CGRectMake(3, 0, 50, 44)];
+        [backButton setImage:[UIImage imageNamedFromMyBundle:@"navi_back.png"] forState:UIControlStateNormal];
+        backButton.imageEdgeInsets = UIEdgeInsetsMake(0, -5, 0, 0);
+        [backButton setTitle:@"返回" forState:UIControlStateNormal];
+        backButton.titleLabel.font = [UIFont systemFontOfSize:15];
+        [backButton addTarget:self action:@selector(popViewControllerAnimated:) forControlEvents:UIControlEventTouchUpInside];
+        UIBarButtonItem* backButtonItem = [[UIBarButtonItem alloc] initWithCustomView:backButton];
+        
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        backButtonItem.style = UIBarButtonItemStyleBordered;
+#pragma clang diagnostic pop
+        self.topViewController.navigationItem.backBarButtonItem = backButtonItem;
+        
+        /**
+         另外一种只有箭头的返回键
+         UIBarButtonItem *backItem = [[UIBarButtonItem alloc] initWithTitle:@"" style:UIBarButtonItemStyleBordered target:nil action:nil];
+         self.topViewController.navigationItem.backBarButtonItem = backItem;
+         */
+    }
+
+    
     [super pushViewController:viewController animated:animated];
 }
 

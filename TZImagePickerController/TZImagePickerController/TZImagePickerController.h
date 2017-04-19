@@ -19,13 +19,17 @@
 #import "TZAssetModel.h"
 #import "NSBundle+TZImagePicker.h"
 
+
 #define iOS7Later ([UIDevice currentDevice].systemVersion.floatValue >= 7.0f)
 #define iOS8Later ([UIDevice currentDevice].systemVersion.floatValue >= 8.0f)
 #define iOS9Later ([UIDevice currentDevice].systemVersion.floatValue >= 9.0f)
 #define iOS9_1Later ([UIDevice currentDevice].systemVersion.floatValue >= 9.1f)
 
+@class RHPhotoModel;
 @protocol TZImagePickerControllerDelegate;
 @interface TZImagePickerController : UINavigationController
+
+@property (nonatomic, assign) BOOL isDisableFinishAutoBack;         //是否禁用完成自动返回
 
 /// Use this init method / 用这个初始化方法
 - (instancetype)initWithMaxImagesCount:(NSInteger)maxImagesCount delegate:(id<TZImagePickerControllerDelegate>)delegate;
@@ -35,6 +39,9 @@
 - (instancetype)initWithSelectedAssets:(NSMutableArray *)selectedAssets selectedPhotos:(NSMutableArray *)selectedPhotos index:(NSInteger)index;
 /// This init method for crop photo / 用这个初始化方法以裁剪图片
 - (instancetype)initCropTypeWithAsset:(id)asset photo:(UIImage *)photo completion:(void (^)(UIImage *cropImage,id asset))completion;
+
+//用这个方法展示最后1张图片
+- (instancetype)initWithLastImage:(id)alAsset delegate:(id<TZImagePickerControllerDelegate>)delegate;
 
 /// Default is 9 / 默认最大可选9张图片
 @property (nonatomic, assign) NSInteger maxImagesCount;
@@ -133,6 +140,7 @@
 @property (nonatomic, strong) UIColor *barItemTextColor;
 @property (nonatomic, strong) UIFont *barItemTextFont;
 
+@property (nonatomic, copy) NSString *editBtnTitleStr;
 @property (nonatomic, copy) NSString *doneBtnTitleStr;
 @property (nonatomic, copy) NSString *cancelBtnTitleStr;
 @property (nonatomic, copy) NSString *previewBtnTitleStr;
@@ -198,6 +206,13 @@
 // If user picking a gif image, this callback will be called.
 // 如果用户选择了一个gif图片，下面的handle会被执行
 - (void)imagePickerController:(TZImagePickerController *)picker didFinishPickingGifImage:(UIImage *)animatedImage sourceAssets:(id)asset;
+
+- (void)imagePickerController:(TZImagePickerController *)picker didFinishPickingPhotoModes:(NSArray<RHPhotoModel *> *)photos sourceAssets:(NSArray *)assets;
+
+- (void)imagePickerController:(TZImagePickerController *)picker didFinishPickingPhotoModes:(NSArray<RHPhotoModel *> *)photos sourceAssets:(NSArray *)assets isSelectOriginalPhoto:(BOOL)isSelectOriginalPhoto infoArray:(NSArray *)infoArray;
+
+- (void)imagePickerControllerDidCancel:(TZImagePickerController *)picker;
+
 @end
 
 

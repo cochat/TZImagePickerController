@@ -7,7 +7,12 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "TZAssetModel.h"
+typedef void(^DismissUpViewController)();
 
+typedef void(^photoResultClickBlock)(UIImage *);
+
+typedef void(^ResultClickBlock)(TZAssetModel *model,NSString *currentNumber);
 @interface TZPhotoPreviewController : UIViewController
 
 @property (nonatomic, strong) NSMutableArray *models;                  ///< All photo models / 所有图片模型数组
@@ -21,5 +26,13 @@
 @property (nonatomic, copy) void (^doneButtonClickBlock)(BOOL isSelectOriginalPhoto);
 @property (nonatomic, copy) void (^doneButtonClickBlockCropMode)(UIImage *cropedImage,id asset);
 @property (nonatomic, copy) void (^doneButtonClickBlockWithPreviewType)(NSArray<UIImage *> *photos,NSArray *assets,BOOL isSelectOriginalPhoto);
+@property (nonatomic, assign) BOOL isRecentPhoto;                //最近的照片
 
+@property (nonatomic, copy) photoResultClickBlock resultClickBlock;
+
+@property (nonatomic, copy) DismissUpViewController dismissVCBlock;
+@property (nonatomic, copy) ResultClickBlock block;
+
+@property (nonatomic, assign) NSInteger  indexPathRow;
+@property (nonatomic, assign) BOOL  allow;//允许直接跳转编辑页面
 @end

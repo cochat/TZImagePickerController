@@ -36,12 +36,20 @@
             self.progressView.hidden = YES;
             self.imageView.alpha = 1.0;
         }
+
+        
+        if (!model.image) {
+            if (!isDegraded) {
+                model.image = photo;
+            }
+        }
+        
         // Set the cell's thumbnail image if it's still showing the same asset.
         if (!iOS8Later) {
-            self.imageView.image = photo; return;
+            self.imageView.image = model.image;return;
         }
         if ([self.representedAssetIdentifier isEqualToString:[[TZImageManager manager] getAssetIdentifier:model.asset]]) {
-            self.imageView.image = photo;
+            self.imageView.image = model.image;
         } else {
             // NSLog(@"this cell is showing other asset");
             [[PHImageManager defaultManager] cancelImageRequest:self.imageRequestID];

@@ -15,10 +15,14 @@
 #import "TZImageManager.h"
 #import "TZVideoPlayerController.h"
 #import "TZGifPhotoPreviewController.h"
+#import "RHPhotoModel.h"
+#import <AssetsLibrary/AssetsLibrary.h>
+
 
 @interface TZPhotoPickerController ()<UICollectionViewDataSource,UICollectionViewDelegate,UIImagePickerControllerDelegate,UINavigationControllerDelegate,UIAlertViewDelegate> {
     NSMutableArray *_models;
-    
+    UIButton *_editButton;
+
     UIButton *_previewButton;
     UIButton *_doneButton;
     UIImageView *_numberImageView;
@@ -39,8 +43,6 @@ static CGSize AssetGridThumbnailSize;
 
 @implementation TZPhotoPickerController
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (UIImagePickerController *)imagePickerVc {
     if (_imagePickerVc == nil) {
         _imagePickerVc = [[UIImagePickerController alloc] init];
@@ -53,8 +55,11 @@ static CGSize AssetGridThumbnailSize;
             tzBarItem = [UIBarButtonItem appearanceWhenContainedInInstancesOfClasses:@[[TZImagePickerController class]]];
             BarItem = [UIBarButtonItem appearanceWhenContainedInInstancesOfClasses:@[[UIImagePickerController class]]];
         } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
             tzBarItem = [UIBarButtonItem appearanceWhenContainedIn:[TZImagePickerController class], nil];
             BarItem = [UIBarButtonItem appearanceWhenContainedIn:[UIImagePickerController class], nil];
+#pragma clang diagnostic pop
         }
         NSDictionary *titleTextAttributes = [tzBarItem titleTextAttributesForState:UIControlStateNormal];
         [BarItem setTitleTextAttributes:titleTextAttributes forState:UIControlStateNormal];
@@ -64,6 +69,11 @@ static CGSize AssetGridThumbnailSize;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    
+    //接收修改图片的广播
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(changeNotifiacation:) name:@"changeNotifiacation" object:nil];
+    
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
     _isSelectOriginalPhoto = tzImagePickerVc.isSelectOriginalPhoto;
     _shouldScrollToBottom = YES;
@@ -73,8 +83,8 @@ static CGSize AssetGridThumbnailSize;
     _showTakePhotoBtn = (([[TZImageManager manager] isCameraRollAlbum:_model.name]) && tzImagePickerVc.allowTakePicture);
     if (!tzImagePickerVc.sortAscendingByModificationDate && _isFirstAppear && iOS8Later) {
         [[TZImageManager manager] getCameraRollAlbum:tzImagePickerVc.allowPickingVideo allowPickingImage:tzImagePickerVc.allowPickingImage completion:^(TZAlbumModel *model) {
-            _model = model;
-            _models = [NSMutableArray arrayWithArray:_model.models];
+            self->_model = model;
+            self->_models = [NSMutableArray arrayWithArray:self->_model.models];
             [self initSubviews];
         }];
     } else {
@@ -104,10 +114,6 @@ static CGSize AssetGridThumbnailSize;
     if (self.backButtonClickHandle) {
         self.backButtonClickHandle(_model);
     }
-}
-
-- (BOOL)prefersStatusBarHidden {
-    return NO;
 }
 
 - (void)configCollectionView {
@@ -151,6 +157,9 @@ static CGSize AssetGridThumbnailSize;
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    
+    [TZImageManager manager].photoOrigion = NO;
+
     [self scrollCollectionViewToBottom];
     // Determine the size of the thumbnails to request from the PHCachingImageManager
     CGFloat scale = 2.0;
@@ -170,45 +179,41 @@ static CGSize AssetGridThumbnailSize;
 
 - (void)configBottomToolBar {
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
-    if (!tzImagePickerVc.showSelectBtn) return;
-    
-    CGFloat yOffset = 0;
-    if (self.navigationController.navigationBar.isTranslucent) {
-        yOffset = self.view.tz_height - 50;
-    } else {
-        CGFloat navigationHeight = 44;
-        if (iOS7Later) navigationHeight += 20;
-        yOffset = self.view.tz_height - 50 - navigationHeight;
-    }
-    
-    UIView *bottomToolBar = [[UIView alloc] initWithFrame:CGRectMake(0, yOffset, self.view.tz_width, 50)];
+    UIView *bottomToolBar = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.tz_height - 50, self.view.tz_width, 50)];
     CGFloat rgb = 253 / 255.0;
     bottomToolBar.backgroundColor = [UIColor colorWithRed:rgb green:rgb blue:rgb alpha:1.0];
     
-    CGFloat previewWidth = [tzImagePickerVc.previewBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:16]} context:nil].size.width + 2;
-    if (!tzImagePickerVc.allowPreview) {
-        previewWidth = 0.0;
-    }
+    
+    _editButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    _editButton.frame = CGRectMake(10, 3, 44, 44);
+    [_editButton addTarget:self action:@selector(editButtonClick) forControlEvents:UIControlEventTouchUpInside];
+    _editButton.titleLabel.font = [UIFont systemFontOfSize:16];
+    [_editButton setTitle:@"编辑" forState:UIControlStateNormal];
+    [_editButton setTitle:@"编辑" forState:UIControlStateDisabled];
+    [_editButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [_editButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateDisabled];
+    _editButton.enabled = tzImagePickerVc.selectedModels.count;
+    
     _previewButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    _previewButton.frame = CGRectMake(10, 3, previewWidth, 44);
-    _previewButton.tz_width = !tzImagePickerVc.showSelectBtn ? 0 : previewWidth;
+    _previewButton.frame = CGRectMake(_editButton.tz_right + 10, 3, 44, 44);
     [_previewButton addTarget:self action:@selector(previewButtonClick) forControlEvents:UIControlEventTouchUpInside];
     _previewButton.titleLabel.font = [UIFont systemFontOfSize:16];
-    [_previewButton setTitle:tzImagePickerVc.previewBtnTitleStr forState:UIControlStateNormal];
-    [_previewButton setTitle:tzImagePickerVc.previewBtnTitleStr forState:UIControlStateDisabled];
+    [_previewButton setTitle:@"预览" forState:UIControlStateNormal];
+    [_previewButton setTitle:@"预览" forState:UIControlStateDisabled];
     [_previewButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
     [_previewButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateDisabled];
     _previewButton.enabled = tzImagePickerVc.selectedModels.count;
     
     if (tzImagePickerVc.allowPickingOriginalPhoto) {
-        CGFloat fullImageWidth = [tzImagePickerVc.fullImageBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:13]} context:nil].size.width;
         _originalPhotoButton = [UIButton buttonWithType:UIButtonTypeCustom];
-        _originalPhotoButton.frame = CGRectMake(CGRectGetMaxX(_previewButton.frame), self.view.tz_height - 50, fullImageWidth + 56, 50);
-        _originalPhotoButton.imageEdgeInsets = UIEdgeInsetsMake(0, -10, 0, 0);
+        CGFloat fullImageWidth = [tzImagePickerVc.fullImageBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:13]} context:nil].size.width;
+        _originalPhotoButton.frame = CGRectMake(CGRectGetMaxX(_previewButton.frame) + 20, self.view.tz_height - 50, fullImageWidth + 56, 50);
+        _originalPhotoButton.imageEdgeInsets = UIEdgeInsetsMake(0, -8, 0, 0);
+        _originalPhotoButton.contentEdgeInsets = UIEdgeInsetsMake(0, -45, 0, 0);
         [_originalPhotoButton addTarget:self action:@selector(originalPhotoButtonClick) forControlEvents:UIControlEventTouchUpInside];
-        _originalPhotoButton.titleLabel.font = [UIFont systemFontOfSize:16];
-        [_originalPhotoButton setTitle:tzImagePickerVc.fullImageBtnTitleStr forState:UIControlStateNormal];
-        [_originalPhotoButton setTitle:tzImagePickerVc.fullImageBtnTitleStr forState:UIControlStateSelected];
+        _originalPhotoButton.titleLabel.font = [UIFont systemFontOfSize:13];
+        [_originalPhotoButton setTitle:@"原图" forState:UIControlStateNormal];
+        [_originalPhotoButton setTitle:@"原图" forState:UIControlStateSelected];
         [_originalPhotoButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];
         [_originalPhotoButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
         [_originalPhotoButton setImage:[UIImage imageNamedFromMyBundle:tzImagePickerVc.photoOriginDefImageName] forState:UIControlStateNormal];
@@ -217,7 +222,7 @@ static CGSize AssetGridThumbnailSize;
         _originalPhotoButton.enabled = tzImagePickerVc.selectedModels.count > 0;
         
         _originalPhotoLabel = [[UILabel alloc] init];
-        _originalPhotoLabel.frame = CGRectMake(fullImageWidth + 46, 0, 80, 50);
+        _originalPhotoLabel.frame = CGRectMake(fullImageWidth + 26, 0, 80, 50);
         _originalPhotoLabel.textAlignment = NSTextAlignmentLeft;
         _originalPhotoLabel.font = [UIFont systemFontOfSize:16];
         _originalPhotoLabel.textColor = [UIColor blackColor];
@@ -228,20 +233,20 @@ static CGSize AssetGridThumbnailSize;
     _doneButton.frame = CGRectMake(self.view.tz_width - 44 - 12, 3, 44, 44);
     _doneButton.titleLabel.font = [UIFont systemFontOfSize:16];
     [_doneButton addTarget:self action:@selector(doneButtonClick) forControlEvents:UIControlEventTouchUpInside];
-    [_doneButton setTitle:tzImagePickerVc.doneBtnTitleStr forState:UIControlStateNormal];
-    [_doneButton setTitle:tzImagePickerVc.doneBtnTitleStr forState:UIControlStateDisabled];
+    [_doneButton setTitle:@"确定" forState:UIControlStateNormal];
+    [_doneButton setTitle:@"确定" forState:UIControlStateDisabled];
     [_doneButton setTitleColor:tzImagePickerVc.oKButtonTitleColorNormal forState:UIControlStateNormal];
     [_doneButton setTitleColor:tzImagePickerVc.oKButtonTitleColorDisabled forState:UIControlStateDisabled];
-    _doneButton.enabled = tzImagePickerVc.selectedModels.count || tzImagePickerVc.alwaysEnableDoneBtn;
+    _doneButton.enabled = tzImagePickerVc.selectedModels.count;
     
     _numberImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamedFromMyBundle:tzImagePickerVc.photoNumberIconImageName]];
-    _numberImageView.frame = CGRectMake(self.view.tz_width - 56 - 28, 10, 30, 30);
+    _numberImageView.frame = CGRectMake(self.view.tz_width - 56 - 24, 12, 26, 26);
     _numberImageView.hidden = tzImagePickerVc.selectedModels.count <= 0;
     _numberImageView.backgroundColor = [UIColor clearColor];
     
     _numberLabel = [[UILabel alloc] init];
     _numberLabel.frame = _numberImageView.frame;
-    _numberLabel.font = [UIFont systemFontOfSize:15];
+    _numberLabel.font = [UIFont systemFontOfSize:16];
     _numberLabel.textColor = [UIColor whiteColor];
     _numberLabel.textAlignment = NSTextAlignmentCenter;
     _numberLabel.text = [NSString stringWithFormat:@"%zd",tzImagePickerVc.selectedModels.count];
@@ -252,21 +257,34 @@ static CGSize AssetGridThumbnailSize;
     CGFloat rgb2 = 222 / 255.0;
     divide.backgroundColor = [UIColor colorWithRed:rgb2 green:rgb2 blue:rgb2 alpha:1.0];
     divide.frame = CGRectMake(0, 0, self.view.tz_width, 1);
-
+    
     [bottomToolBar addSubview:divide];
+    [bottomToolBar addSubview:_editButton];
     [bottomToolBar addSubview:_previewButton];
     [bottomToolBar addSubview:_doneButton];
     [bottomToolBar addSubview:_numberImageView];
     [bottomToolBar addSubview:_numberLabel];
     [self.view addSubview:bottomToolBar];
-    [self.view addSubview:_originalPhotoButton];
-    [_originalPhotoButton addSubview:_originalPhotoLabel];
+//        [self.view addSubview:_originalPhotoButton];
+//        [_originalPhotoButton addSubview:_originalPhotoLabel];
 }
+
 
 #pragma mark - Click Event
 
 - (void)previewButtonClick {
     TZPhotoPreviewController *photoPreviewVc = [[TZPhotoPreviewController alloc] init];
+    [self pushPhotoPrevireViewController:photoPreviewVc];
+}
+
+- (void)editButtonClick {
+    TZPhotoPreviewController *photoPreviewVc = [[TZPhotoPreviewController alloc] init];
+    photoPreviewVc.allow = YES;
+    photoPreviewVc.dismissVCBlock = ^(){
+        [self dismissViewControllerAnimated:YES completion:^{
+            
+        }];
+    };
     [self pushPhotoPrevireViewController:photoPreviewVc];
 }
 
@@ -289,56 +307,76 @@ static CGSize AssetGridThumbnailSize;
     [tzImagePickerVc showProgressHUD];
     NSMutableArray *photos = [NSMutableArray array];
     NSMutableArray *assets = [NSMutableArray array];
+    NSMutableArray *photoModels = [NSMutableArray array];
     NSMutableArray *infoArr = [NSMutableArray array];
-    for (NSInteger i = 0; i < tzImagePickerVc.selectedModels.count; i++) { [photos addObject:@1];[assets addObject:@1];[infoArr addObject:@1]; }
+    for (NSInteger i = 0; i < tzImagePickerVc.selectedModels.count; i++) { [photos addObject:@1];[assets addObject:@1];[infoArr addObject:@1]; [photoModels addObject:@1]; }
     
-    __block BOOL havenotShowAlert = YES;
     [TZImageManager manager].shouldFixOrientation = YES;
+
+    [TZImageManager manager].photoOrigion = _isSelectOriginalPhoto;
+
     for (NSInteger i = 0; i < tzImagePickerVc.selectedModels.count; i++) {
+        
         TZAssetModel *model = tzImagePickerVc.selectedModels[i];
-        [[TZImageManager manager] getPhotoWithAsset:model.asset completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+        [[TZImageManager manager]getSelectedPhotoWithAsset:model completion:^(RHPhotoModel *photoModel, UIImage *photo, NSDictionary *info, BOOL isDegraded) {
             if (isDegraded) return;
             if (photo) {
                 photo = [self scaleImage:photo toSize:CGSizeMake(tzImagePickerVc.photoWidth, (int)(tzImagePickerVc.photoWidth * photo.size.height / photo.size.width))];
                 [photos replaceObjectAtIndex:i withObject:photo];
             }
+            if (photoModel) [photoModels replaceObjectAtIndex:i withObject:photoModel];
             if (info)  [infoArr replaceObjectAtIndex:i withObject:info];
             [assets replaceObjectAtIndex:i withObject:model.asset];
-
+            
             for (id item in photos) { if ([item isKindOfClass:[NSNumber class]]) return; }
             
-            if (havenotShowAlert) {
-                [self didGetAllPhotos:photos assets:assets infoArr:infoArr];
+            if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotos:sourceAssets:isSelectOriginalPhoto:)]) {
+                [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotos:photos sourceAssets:assets isSelectOriginalPhoto:self.isSelectOriginalPhoto];
             }
-        } progressHandler:^(double progress, NSError *error, BOOL *stop, NSDictionary *info) {
-            // 如果图片正在从iCloud同步中,提醒用户
-            if (progress < 1 && havenotShowAlert) {
-                [tzImagePickerVc hideProgressHUD];
-                [tzImagePickerVc showAlertWithTitle:[NSBundle tz_localizedStringForKey:@"Synchronizing photos from iCloud"]];
-                havenotShowAlert = NO;
-                return;
+            if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotos:sourceAssets:isSelectOriginalPhoto:infos:)]) {
+                [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotos:photos sourceAssets:assets isSelectOriginalPhoto:self.isSelectOriginalPhoto infos:infoArr];
             }
-        } networkAccessAllowed:YES];
+            
+            if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotoModes:sourceAssets:)]) {
+                [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotoModes:photoModels sourceAssets:infoArr];
+            }
+            
+            if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotoModes:sourceAssets:isSelectOriginalPhoto:infoArray:)]) {
+                [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotoModes:photoModels sourceAssets:assets isSelectOriginalPhoto:self.isSelectOriginalPhoto infoArray:infoArr];
+            }
+            
+            if (tzImagePickerVc.didFinishPickingPhotosHandle) {
+                tzImagePickerVc.didFinishPickingPhotosHandle(photos,assets, self.isSelectOriginalPhoto);
+            }
+            if (tzImagePickerVc.didFinishPickingPhotosWithInfosHandle) {
+                tzImagePickerVc.didFinishPickingPhotosWithInfosHandle(photos,assets, self.isSelectOriginalPhoto,infoArr);
+            }
+            [tzImagePickerVc hideProgressHUD];
+            
+            //            if (tzImagePickerVc.autoDismiss) {
+            //                [self.navigationController dismissViewControllerAnimated:YES completion:nil];
+            //            }
+        }];
     }
     if (tzImagePickerVc.selectedModels.count <= 0) {
-        [self didGetAllPhotos:photos assets:assets infoArr:infoArr];
+        [self didGetAllPhotos:photos assets:assets infoArr:infoArr photoArr:photoModels];
     }
 }
 
-- (void)didGetAllPhotos:(NSArray *)photos assets:(NSArray *)assets infoArr:(NSArray *)infoArr {
+- (void)didGetAllPhotos:(NSArray *)photos assets:(NSArray *)assets infoArr:(NSArray *)infoArr photoArr:(NSArray *)photoArr {
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
     [tzImagePickerVc hideProgressHUD];
     
     if (tzImagePickerVc.autoDismiss) {
         [self.navigationController dismissViewControllerAnimated:YES completion:^{
-            [self callDelegateMethodWithPhotos:photos assets:assets infoArr:infoArr];
+            [self callDelegateMethodWithPhotos:photos assets:assets infoArr:infoArr photoArr:photoArr];
         }];
     } else {
-        [self callDelegateMethodWithPhotos:photos assets:assets infoArr:infoArr];
+            [self callDelegateMethodWithPhotos:photos assets:assets infoArr:infoArr photoArr:photoArr];
     }
 }
 
-- (void)callDelegateMethodWithPhotos:(NSArray *)photos assets:(NSArray *)assets infoArr:(NSArray *)infoArr {
+- (void)callDelegateMethodWithPhotos:(NSArray *)photos assets:(NSArray *)assets infoArr:(NSArray *)infoArr photoArr:(NSArray *)photoArr{
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
     if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotos:sourceAssets:isSelectOriginalPhoto:)]) {
         [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotos:photos sourceAssets:assets isSelectOriginalPhoto:_isSelectOriginalPhoto];
@@ -351,6 +389,10 @@ static CGSize AssetGridThumbnailSize;
     }
     if (tzImagePickerVc.didFinishPickingPhotosWithInfosHandle) {
         tzImagePickerVc.didFinishPickingPhotosWithInfosHandle(photos,assets,_isSelectOriginalPhoto,infoArr);
+    }
+    
+    if ([tzImagePickerVc.pickerDelegate respondsToSelector:@selector(imagePickerController:didFinishPickingPhotoModes:sourceAssets:)]) {
+        [tzImagePickerVc.pickerDelegate imagePickerController:tzImagePickerVc didFinishPickingPhotoModes:photoArr sourceAssets:infoArr];
     }
 }
 
@@ -384,6 +426,8 @@ static CGSize AssetGridThumbnailSize;
     } else {
         model = _models[indexPath.row - 1];
     }
+    model.recodcurrentNumber = [NSString stringWithFormat:@"%ld",indexPath.row];
+    
     cell.allowPickingGif = tzImagePickerVc.allowPickingGif;
     cell.model = model;
     cell.showSelectBtn = tzImagePickerVc.showSelectBtn;
@@ -427,6 +471,9 @@ static CGSize AssetGridThumbnailSize;
 
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // take a photo / 去拍照
+    
+    self.indexPathRow = indexPath.row;
+    
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
     if (((tzImagePickerVc.sortAscendingByModificationDate && indexPath.row >= _models.count) || (!tzImagePickerVc.sortAscendingByModificationDate && indexPath.row == 0)) && _showTakePhotoBtn)  {
         [self takePhoto]; return;
@@ -459,6 +506,8 @@ static CGSize AssetGridThumbnailSize;
         TZPhotoPreviewController *photoPreviewVc = [[TZPhotoPreviewController alloc] init];
         photoPreviewVc.currentIndex = index;
         photoPreviewVc.models = _models;
+        photoPreviewVc.indexPathRow = self.indexPathRow;
+
         [self pushPhotoPrevireViewController:photoPreviewVc];
     }
 }
@@ -498,7 +547,8 @@ static CGSize AssetGridThumbnailSize;
 
 - (void)refreshBottomToolBarStatus {
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
-    
+    _editButton.enabled = tzImagePickerVc.selectedModels.count == 1;
+
     _previewButton.enabled = tzImagePickerVc.selectedModels.count > 0;
     _doneButton.enabled = tzImagePickerVc.selectedModels.count > 0 || tzImagePickerVc.alwaysEnableDoneBtn;
     
@@ -525,7 +575,7 @@ static CGSize AssetGridThumbnailSize;
         [weakSelf doneButtonClick];
     }];
     [photoPreviewVc setDoneButtonClickBlockCropMode:^(UIImage *cropedImage, id asset) {
-        [weakSelf didGetAllPhotos:@[cropedImage] assets:@[asset] infoArr:nil];
+        [weakSelf didGetAllPhotos:@[cropedImage] assets:@[asset] infoArr:nil photoArr:nil];
     }];
     [self.navigationController pushViewController:photoPreviewVc animated:YES];
 }
@@ -666,8 +716,41 @@ static CGSize AssetGridThumbnailSize;
     [picker dismissViewControllerAnimated:YES completion:nil];
 }
 
+#pragma mark notificationCenter
+- (void)changeNotifiacation:(NSNotification *)noti
+{
+    if (self.isRecentPhoto) {
+        TZAssetModel *model = noti.object;
+        
+        NSInteger indexs = [model.recodcurrentNumber intValue];
+        
+        UIImage *image = self->_models[indexs];
+        image = model.image;
+        [self->_models replaceObjectAtIndex:indexs withObject:image];
+        
+    }else
+    {
+        TZAssetModel *model = noti.object;
+        
+        NSInteger indexs = [model.recodcurrentNumber intValue];
+        
+        TZAssetModel *modelsset = self->_models[indexs];
+        modelsset.image = model.image;
+        modelsset.currentNumber = model.currentNumber;
+        modelsset.isEdit = model.isEdit;
+        [self->_models replaceObjectAtIndex:indexs withObject:modelsset];
+    }
+    [self->_collectionView reloadData];
+    
+    
+    
+}
+
+
 - (void)dealloc {
     // NSLog(@"%@ dealloc",NSStringFromClass(self.class));
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+
 }
 
 #pragma mark - Asset Caching
@@ -780,6 +863,9 @@ static CGSize AssetGridThumbnailSize;
 }
 #pragma clang diagnostic pop
 
+
+
+
 @end
 
 
@@ -792,5 +878,7 @@ static CGSize AssetGridThumbnailSize;
     }
     return [super touchesShouldCancelInContentView:view];
 }
+
+
 
 @end

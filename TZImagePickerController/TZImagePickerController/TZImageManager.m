@@ -10,6 +10,8 @@
 #import <AssetsLibrary/AssetsLibrary.h>
 #import "TZAssetModel.h"
 #import "TZImagePickerController.h"
+#import "RHPhotoModel.h"
+
 
 @interface TZImageManager ()
 #pragma clang diagnostic push
@@ -378,6 +380,101 @@ static CGFloat TZScreenScale;
 }
 
 #pragma mark - Get Photo
+/**
+ *  获取选中的图片
+ *
+ *  @param asset
+ *  @param completion 回调
+ */
+- (void)getSelectedPhotoWithAsset:(TZAssetModel *)model completion:(void(^)(RHPhotoModel * photoModel,UIImage * photo ,NSDictionary * info, BOOL isDegraded)) completion{
+    
+    TZAssetModelMediaType type = TZAssetModelMediaTypePhoto;          // 用于区分是视频还是图片
+    
+    RHPhotoModel *photoModel = [[RHPhotoModel alloc] init];
+
+        [self getPhotoWithAsset:model.asset completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+           
+            //选原图经测试，只会调用一次
+            if (isDegraded == YES) {
+                photoModel.thumbImage = photo;
+            }
+            photoModel.isEdit = model.isEdit;
+
+            if ([model.asset isKindOfClass:[PHAsset class]]) {
+                [[PHImageManager defaultManager] requestImageDataForAsset:model.asset options:nil resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, UIImageOrientation orientation, NSDictionary * _Nullable info) {
+                    
+                    if (self.photoOrigion) {
+                        
+                        //选原图后，压缩赋值缩略图
+                        UIImage *resultImage = [UIImage imageWithData:imageData scale:1];
+                        
+                        photoModel.thumbImage = [RHTools scaleImage:resultImage maxSize:50];
+                        
+                        //如果image有值
+                        if (model.image && model.isEdit) {
+                            NSData *changeImageData = UIImageJPEGRepresentation(model.image, 1);
+                            photoModel.image = model.image;
+                            imageData = changeImageData;
+                        }else
+                        {
+                            imageData = imageData;
+                            photoModel.image = photo;
+                        }
+                        
+                    } else {
+                        
+                        //如果image有值
+                        if (model.image && model.isEdit) {
+                            NSData *changeImageData = UIImageJPEGRepresentation(model.image, 0.45);
+                            photoModel.image = model.image;
+                            imageData = changeImageData;
+                        }else
+                        {
+                            NSData *changeImageData = UIImageJPEGRepresentation(photo, 0.45);
+                            imageData = changeImageData;
+                            photoModel.image = photo;
+                        }
+                    }
+                    
+                    NSInteger dataLength = 0;
+                    if (type != TZAssetModelMediaTypeVideo) {
+                        dataLength = imageData.length;
+                    }
+                    
+                    NSArray *resources = [PHAssetResource assetResourcesForAsset:model.asset];
+                    NSString *orgFilename = ((PHAssetResource*)resources[0]).originalFilename;
+                    if (orgFilename == nil || [orgFilename isBlank]) {
+                        NSURL *fileUrl =  [info objectForKey:@"PHImageFileURLKey"];
+                        orgFilename = [[NSFileManager defaultManager] displayNameAtPath:[fileUrl path]];
+                    }
+                    photoModel.name = orgFilename;
+                    photoModel.photoPath = [RHTools writeDataToTemporaryDirectory:imageData
+                                                                         fileName:orgFilename];
+                    photoModel.imageData = imageData;
+                    photoModel.size = dataLength;
+                    if (completion) completion(photoModel,photo,info, isDegraded);
+                }];
+            } else if ([model.asset isKindOfClass:[ALAsset class]]) {
+                ALAsset *alAsset = (ALAsset *)model.asset;
+                CGImageRef ratioThum = [alAsset aspectRatioThumbnail];
+                ALAssetRepresentation *representation = [alAsset defaultRepresentation];
+                NSString *name = [representation filename];
+                NSInteger dataLength = (NSInteger)[representation size];
+                Byte *imageBuffer = (Byte*)malloc(representation.size);
+                NSUInteger bufferSize = [representation getBytes:imageBuffer fromOffset:0.0 length:representation.size error:nil];
+                NSData *imageData = [NSData dataWithBytesNoCopy:imageBuffer length:bufferSize freeWhenDone:YES];
+                UIImage* rti = [UIImage imageWithCGImage:ratioThum];
+                photoModel.thumbImage = rti;
+                photoModel.name = name;
+                photoModel.imageData = imageData;
+                photoModel.photoPath = [RHTools writeDataToTemporaryDirectory:imageData                                                                 fileName:name];
+                photoModel.size = dataLength;
+                
+                if (completion) completion(photoModel,photo,info,isDegraded);
+            }
+            
+        }];
+}
 
 /// Get photo 获得照片本身
 - (PHImageRequestID)getPhotoWithAsset:(id)asset completion:(void (^)(UIImage *, NSDictionary *, BOOL isDegraded))completion {
@@ -385,7 +482,7 @@ static CGFloat TZScreenScale;
     if (fullScreenWidth > _photoPreviewMaxWidth) {
         fullScreenWidth = _photoPreviewMaxWidth;
     }
-    return [self getPhotoWithAsset:asset photoWidth:fullScreenWidth completion:completion progressHandler:nil networkAccessAllowed:YES];
+    return [self getPhotoWithAsset:asset photoWidth:_photoPreviewMaxWidth completion:completion progressHandler:nil networkAccessAllowed:YES];
 }
 
 - (PHImageRequestID)getPhotoWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(UIImage *photo,NSDictionary *info,BOOL isDegraded))completion {
@@ -397,7 +494,7 @@ static CGFloat TZScreenScale;
     if (fullScreenWidth > _photoPreviewMaxWidth) {
         fullScreenWidth = _photoPreviewMaxWidth;
     }
-    return [self getPhotoWithAsset:asset photoWidth:fullScreenWidth completion:completion progressHandler:progressHandler networkAccessAllowed:networkAccessAllowed];
+    return [self getPhotoWithAsset:asset photoWidth:_photoPreviewMaxWidth completion:completion progressHandler:progressHandler networkAccessAllowed:networkAccessAllowed];
 }
 
 - (PHImageRequestID)getPhotoWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(UIImage *photo,NSDictionary *info,BOOL isDegraded))completion progressHandler:(void (^)(double progress, NSError *error, BOOL *stop, NSDictionary *info))progressHandler networkAccessAllowed:(BOOL)networkAccessAllowed {
@@ -415,7 +512,13 @@ static CGFloat TZScreenScale;
         // 修复获取图片时出现的瞬间内存过高问题
         // 下面两行代码，来自hsjcom，他的github是：https://github.com/hsjcom 表示感谢
         PHImageRequestOptions *option = [[PHImageRequestOptions alloc] init];
-        option.resizeMode = PHImageRequestOptionsResizeModeFast;
+        if (self.photoOrigion) {
+            option.resizeMode = PHImageRequestOptionsResizeModeFast;
+            imageSize = PHImageManagerMaximumSize;
+        }else
+        {
+            option.resizeMode = PHImageRequestOptionsResizeModeFast;
+        }
         PHImageRequestID imageRequestID = [[PHImageManager defaultManager] requestImageForAsset:asset targetSize:imageSize contentMode:PHImageContentModeAspectFill options:option resultHandler:^(UIImage * _Nullable result, NSDictionary * _Nullable info) {
             BOOL downloadFinined = (![[info objectForKey:PHImageCancelledKey] boolValue] && ![info objectForKey:PHImageErrorKey]);
             if (downloadFinined && result) {
