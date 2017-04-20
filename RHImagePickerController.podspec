@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "RHImagePickerController"
-  s.version      = "1.7.9.1"
+  s.version      = "1.7.9.2"
   s.summary      = "A clone of UIImagePickerController, support picking multiple photos、original photo and video"
   s.homepage     = "https://github.com/cochat/TZImagePickerController"
   s.license      = "MIT"
